@@ -58,6 +58,7 @@ class Haproxy(object):
     cls_ca_certs = []
     cls_nets = set()
     cls_service_id = ""
+    cls_namespace = ""
 
     def __init__(self, running_mode=RunningMode.LegacyMode):
         logger.info("==========BEGIN==========")
@@ -117,10 +118,10 @@ class Haproxy(object):
             logger.info("Docker API error, regressing to legacy links mode: %s" % e)
             return None
         haproxy_container_id = os.environ.get("HOSTNAME", "")
-        Haproxy.cls_service_id, Haproxy.cls_nets = SwarmModeLinkHelper.get_swarm_mode_haproxy_id_nets(docker,
+        Haproxy.cls_service_id, Haproxy.cls_nets, Haproxy.cls_namespace = SwarmModeLinkHelper.get_swarm_mode_haproxy_id_nets(docker,
                                                                                                       haproxy_container_id)
         links, Haproxy.cls_linked_tasks = SwarmModeLinkHelper.get_swarm_mode_links(docker, Haproxy.cls_service_id,
-                                                                                   Haproxy.cls_nets)
+                                                                                   Haproxy.cls_nets, Haproxy.cls_namespace)
         logger.info("Linked service: %s", ", ".join(SwarmModeLinkHelper.get_service_links_str(links)))
         logger.info("Linked container: %s", ", ".join(SwarmModeLinkHelper.get_container_links_str(links)))
         return links

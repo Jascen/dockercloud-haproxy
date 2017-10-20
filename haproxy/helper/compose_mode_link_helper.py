@@ -1,4 +1,5 @@
 import logging
+from haproxy.config import LINKED_SERVICES
 
 logger = logging.getLogger("haproxy")
 
@@ -49,12 +50,25 @@ def _calc_links(docker, linked_compose_services, project):
         compose_labels = container.get("Config", {}).get("Labels", {})
         compose_project = compose_labels.get("com.docker.compose.project", "")
         compose_service = compose_labels.get("com.docker.compose.service", "")
-
+                
+        linked_service_names = {}
+        for x in str(LINKED_SERVICES).strip().split(";"):
+            if not x.strip():
+                break
+            
+            service_values = x.strip().split(":")
+            service_name = "%s" % service_values[0]
+            if len(service_values) == 2:
+                linked_service_names[service_name] = {y: {} for y in service_values[1].strip().split(",") if y}
+            else:
+                linked_service_names[service_name] = {}
+            
         if compose_project == project and compose_service in linked_compose_services:
             service_name = "%s_%s" % (compose_project, compose_service)
             container_name = container.get("Name").lstrip("/")
             container_evvvars = get_container_envvars(container)
-            endpoints = get_container_endpoints(container, container_name)
+            explicit_endpoints = linked_service_names.get(compose_service, {})
+            endpoints = get_container_endpoints(container, container_name, explicit_endpoints)
             links[container_id] = {"service_name": service_name,
                                    "container_envvars": container_evvvars,
                                    "container_name": container_name,
@@ -64,10 +78,12 @@ def _calc_links(docker, linked_compose_services, project):
     return links
 
 
-def get_container_endpoints(container, container_name):
+def get_container_endpoints(container, container_name, explicit_endpoints):
     endpoints = {}
-    container_endpoints = container.get("Config", {}).get("ExposedPorts", {})
-    for k, v in container_endpoints.iteritems():
+    if not explicit_endpoints:
+        explicit_endpoints = container.get("Config", {}).get("ExposedPorts", {})
+
+    for k, v in explicit_endpoints.iteritems():
         if k:
             terms = k.split("/", 1)
             port = terms[0]
@@ -79,7 +95,6 @@ def get_container_endpoints(container, container_name):
                 v = "%s://%s:%s" % (protocol, container_name, port)
             endpoints[k] = v
     return endpoints
-
 
 def get_container_envvars(container):
     container_evvvars = []
@@ -105,14 +120,25 @@ def _get_linked_compose_services(networks, project):
         if network_links:
             haproxy_links.extend(network_links)
 
+    linked_service_names = []
+    if LINKED_SERVICES:
+        for x in str(LINKED_SERVICES).strip().split(";"):
+            if not x.strip():
+                break
+            service_values = x.strip().split(":")
+            if service_values:
+                linked_service_names.append("%s" % (service_values[0]))
+
     linked_services = []
     for link in haproxy_links:
         terms = link.strip().split(":")
-        service = terms[0].strip()
+        service = terms[0].strip()    
         if service and service.startswith(prefix):
             last = service.rfind("_")
             linked_service = service[prefix_len:last]
-            if linked_service not in linked_services:
+            if linked_service_names and linked_service not in linked_service_names:
+                continue
+            if linked_service not in linked_services:                
                 linked_services.append(linked_service)
     return linked_services
 

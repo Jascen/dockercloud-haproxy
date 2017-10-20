@@ -110,7 +110,7 @@ def polling_service_status_swarm_mode():
             services = docker.services()
             tasks = docker.tasks(filters={"desired-state": "running"})
             _, linked_tasks = SwarmModeLinkHelper.get_task_links(tasks, services, Haproxy.cls_service_id,
-                                                                 Haproxy.cls_nets)
+                                                                 Haproxy.cls_nets, Haproxy.cls_namespace)
             if cmp(Haproxy.cls_linked_tasks, linked_tasks) != 0:
                 add_haproxy_run_task("Tasks are updated")
         except APIError as e:
